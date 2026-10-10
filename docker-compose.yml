@@ -1,0 +1,15 @@
+services:
+  pocketbase:
+    # Pinned stable version; review release notes before upgrading.
+    image: pocketbase/pocketbase:v0.23.8
+    container_name: spotsync-pocketbase
+    command:
+      # Serve the API on all interfaces inside the container.
+      - serve
+      - --http=0.0.0.0:8090
+      - --dir=/pb_data
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - ./pb_data:/pb_data
+    restart: unless-stopped
