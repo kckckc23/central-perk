@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  /* Brand palette — warm terracotta. Rename freely; only these tokens matter. */
+  --color-brand-50: #fdf6f0;
+  --color-brand-100: #f9e8dc;
+  --color-brand-200: #f3cdb3;
+  --color-brand-300: #ebab82;
+  --color-brand-400: #e08552;
+  --color-brand-500: #d96a33;
+  --color-brand-600: #bc5226;
+  --color-brand-700: #9a3f20;
+  --color-brand-800: #7a321d;
+  --color-brand-900: #622b1b;
+
+  --shadow-card: 0 1px 2px rgb(28 25 23 / 0.06), 0 1px 3px rgb(28 25 23 / 0.08);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-stone-50 text-stone-900 antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-600;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-stone-200 bg-white shadow-card;
+  }
+
+  .venue-marker {
+    @apply flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-xs font-bold text-white shadow;
+    background-color: var(--color-brand-600);
+  }
+}
