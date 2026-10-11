@@ -1,148 +1,198 @@
-# SpotSync
+# Central Perk — SpotSync
 
-**Find a place everyone can get to.**
+A fair meetup spot finder for groups of friends. Share an approximate
+location, your food/category preferences, and a travel budget; the app
+discovers nearby venues from **OpenStreetMap**, scores them by
+*travel fairness* (45%), *preference match* (40%) and *data
+completeness* (15%), and lets everyone vote and shortlist — the host
+confirms the final spot.
 
-SpotSync is a mobile-first web app where friends create a shared room, add their starting locations and hangout preferences, discover venues that work for the group, and shortlist/vote on a final meetup spot.
+- **Frontend:** Next.js 15 (App Router) + TypeScript + Tailwind CSS v4 + shadcn-style components
+- **Database:** Neon Serverless Postgres (add via the Vercel Marketplace)
+- **Maps:** MapLibre GL + open tile styles (OpenFreeMap) — no Google Maps
+- **Geocoding:** Photon (OpenStreetMap) — keyless
+- **Venue data:** Overpass API (OpenStreetMap) — keyless; falls back to a deterministic demo dataset
+- **Routing:** Haversine straight-line estimates (deterministic, offline); optional self-hosted Valhalla/OSRM
 
-It is built entirely on open-source software and open geographic data — no Google Maps, Mapbox, paid place-search APIs, paid AI APIs, or mandatory sign-in providers.
+No API keys are required for the default open-data setup, and no
+separate backend server is needed — the whole app is serverless.
 
-## Features
-
-- **Rooms with unguessable links** — create a room, share `/room/<random-id>`; friends join as guests with just a display name.
-- **Private locations** — each participant's exact coordinates are stored in a protected record and never exposed to other participants; only travel estimates are shared.
-- **Preferences** — place types, cuisines, budget (INR), max straight-line distance, travel mode, and nice-to-haves. Each field can be a hard constraint or a soft preference.
-- **Honest discovery** — venues come from OpenStreetMap (Overpass), normalised and deduplicated. Missing data is shown as "Not available" / "Unknown" — no invented ratings, prices, or opening hours.
-- **Deterministic ranking** — 45% travel fairness (average + worst case), 40% preference match, 15% data completeness. Fully unit-tested.
-- **Shortlist & vote** — idempotent votes, host confirms the final venue, directions open in OpenStreetMap's routing UI.
-- **Graceful degradation** — if the map-data endpoint is unreachable, a clearly labelled demo-data mode keeps the room and voting flow working.
-
-## Prerequisites
-
-- Node.js 20+ (developed on Node 22) and npm
-- Docker (to run PocketBase locally)
+---
 
 ## Quick start
 
+### 1. Install
+
 ```bash
-git clone <repo-url>
-cd central-perk
-
-cp .env.example .env
-
-# 1. Start PocketBase (SQLite-backed, persistent volume)
-docker compose up -d
-
-# 2. Create the first superuser
-#    Open http://127.0.0.1:8090/_/ and create an account.
-#    Put those credentials into .env:
-#      POCKETBASE_SUPERUSER_EMAIL=...
-#      POCKETBASE_SUPERUSER_PASSWORD=...
-
-# 3. Install and run
 npm install
-npm run dev
+cp .env.example .env
 ```
 
-Open http://localhost:3000. Collections are created/updated automatically on server start and on the first API request — no manual setup step.
+### 2. Create the database
 
-> **Note:** rooms are only reachable by friends when the app runs on a server they can all access. Localhost development lets you test the full flow in two browser sessions (e.g. an incognito window), but friends in different homes need a deployed instance.
-
-## Commands
-
-| Task | Command |
-|---|---|
-| Development server | `npm run dev` |
-| Production build | `npm run build` |
-| Start production server | `npm start` |
-| Type check | `npm run typecheck` |
-| Lint | `npm run lint` |
-| Unit tests | `npm test` |
-| Tests (watch) | `npm run test:watch` |
-
-## Environment variables
-
-Copy `.env.example` to `.env`. All external endpoints are configurable so public community endpoints can be replaced with self-hosted instances.
-
-| Variable | Purpose | Default |
-|---|---|---|
-| `POCKETBASE_URL` | Server-side PocketBase URL | `http://127.0.0.1:8090` |
-| `POCKETBASE_SUPERUSER_EMAIL` | Superuser email (server-side only) | — |
-| `POCKETBASE_SUPERUSER_PASSWORD` | Superuser password (server-side only) | — |
-| `SESSION_SECRET` | Cookie signing secret for production | dev fallback (change in prod) |
-| `NEXT_PUBLIC_MAP_STYLE_URL` | MapLibre style URL | OpenFreeMap "liberty" style |
-| `PHOTON_BASE_URL` | Photon-compatible geocoding endpoint | `https://photon.komoot.io/api/` |
-| `OVERPASS_BASE_URL` | Overpass-compatible venue query endpoint | `https://overpass-api.de/api/interpreter` |
-| `ROUTING_PROVIDER` | `haversine` (default), `valhalla`, or `osrm` | `haversine` |
-| `VALHALLA_BASE_URL` | Self-hosted Valhalla endpoint (optional) | — |
-| `OSRM_BASE_URL` | Self-hosted OSRM endpoint (optional) | — |
-| `NEXT_PUBLIC_SITE_URL` | Public URL, used for invite links | `http://localhost:3000` |
-
-Leave `PHOTON_BASE_URL` or `OVERPASS_BASE_URL` empty to disable manual place search / live venue discovery (the app then shows its clearly labelled demo venues).
-
-## Local services
-
-**PocketBase** runs via `docker compose up -d` with a persistent `./pb_data` volume. The app connects server-side only, using the superuser token; the browser never talks to PocketBase directly, and all collection API rules are empty (default deny). Authorisation is enforced in the Next.js API routes.
-
-**Backup / restore** (SQLite inside PocketBase):
+Deploy on Vercel and add the **Neon** integration
+(Project → **Storage** tab → **Neon** → *Create Database*). Vercel
+sets `DATABASE_URL` automatically; the schema migrates on every
+server boot. To migrate manually:
 
 ```bash
-# stop the container, then copy the database
-docker compose down
-cp pb_data/data.db pb_data/data.db.bak
-# restore
-cp pb_data/data.db.bak pb_data/data.db
-docker compose up -d
+npm run db:migrate
 ```
 
-## Self-hosting the data layer
+For local development, create a free Neon database at
+`neon.tech`, paste its connection string into `.env` as
+`DATABASE_URL`, then run `npm run db:migrate`.
 
-Public community endpoints are shared infrastructure with usage policies — for sustained use, self-host:
+### 3. Run
 
-- **Overpass API** — for venue queries (regional extracts recommended)
-- **Photon** — for geocoding
-- **OpenFreeMap** — self-hosted tile styles, or any MapLibre-compatible style
-- **Valhalla / OSRM** — optional road routing; when configured, distances become real route distances with estimated travel times. Without a router, all distances are labelled **straight-line** estimates.
-
-## Data attribution
-
-- **OpenStreetMap** contributors, © OpenStreetMap contributors, licensed under the [ODbL](https://opendatacommons.org/licenses/odbl/). Attribution is shown on the map and in venue details.
-- **Map tiles** — OpenFreeMap (openstreetmap data) unless you configure another MapLibre style.
-- **Geocoding** — Photon (Komoot), built on OpenStreetMap.
-- **Map rendering** — [MapLibre GL JS](https://maplibre.org/).
-
-Open-source software and public data do **not** guarantee free unlimited hosting. Check each provider's usage policy before relying on public endpoints in production.
-
-## Privacy model
-
-- Exact coordinates live only in the `private_locations` collection, which is never readable through any client-facing payload.
-- Other participants see only: display names, readiness flags, server-computed travel estimates, and your own location.
-- Room links are invitations, not authentication: session tokens are 32-byte random values stored as SHA-256 hashes; participants can only modify their own records; only the host can confirm the final venue.
-- Rooms expire after 30 days (enforced server-side), and leaving a room deletes your data.
-
-## Limitations
-
-- **No ratings/reviews** — OpenStreetMap has no trustworthy rating data, so none is shown. In-room votes are the group signal.
-- **Prices** — OSM rarely tags prices; most venues show "Price unknown".
-- **Opening hours** — shown as source-provided text; "open now" is not claimed.
-- **Realtime** — the first iteration uses a documented 4-second polling fallback rather than PocketBase realtime subscriptions, to keep room-scoped authorisation airtight.
-- **Rate limiting** is single-process/in-memory.
-- **Demo venues** are deterministic fake data, used only when the Overpass endpoint is unreachable, and always labelled.
-
-## Project structure
-
-```text
-app/                  Next.js App Router pages + API routes
-components/           UI (ui kit, landing, room, map, location)
-lib/
-  config/             env + brand configuration
-  db/                 PocketBase REST client + collection setup
-  providers/          geocoding, places (Overpass), routing adapters
-  recommendations/    haversine-based discovery + scoring engine
-  venues/             OSM normalisation, category mapping, demo data
-  auth/               guest session tokens + cookies
-tests/                Vitest unit tests (scoring, haversine, parsing, …)
+```bash
+npm run dev        # http://localhost:3000
 ```
 
-## License
+### 4. Build & verify
 
-MIT
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+---
+
+## Deployment on Vercel
+
+1. Push the repo to GitHub.
+2. In the Vercel dashboard: **Add New → Project → Import** the repo
+   (framework preset: *Next.js*, Node.js 22).
+3. **Storage tab → Neon → Create Database** — this creates the
+   serverless Postgres instance and sets `DATABASE_URL`
+   (pooled connection string) for you.
+4. Set the remaining environment variables
+   (Project → **Settings → Environment Variables**):
+
+| Variable | Required | Notes |
+|---|---|---|
+| `DATABASE_URL` | ✅ | Auto-created by the Neon Marketplace integration (pooled URL) |
+| `SESSION_SECRET` | ✅ (prod) | Random 32-byte hex: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `NEXT_PUBLIC_SITE_URL` | recommended | Base URL used in invite links |
+| `PHOTON_BASE_URL` | optional | Default `https://photon.komoot.io` |
+| `OVERPASS_BASE_URL` | optional | Default `https://overpass-api.de/api/interpreter`; empty = demo data |
+| `NEXT_PUBLIC_MAP_STYLE_URL` | optional | Default: dark OpenFreeMap style |
+| `ROUTING_PROVIDER` / `VALHALLA_BASE_URL` / `OSRM_BASE_URL` | optional | Self-hosted routing only |
+
+⚠️ **Never** prefix `DATABASE_URL` or `SESSION_SECRET` with
+`NEXT_PUBLIC_` — that would expose them to the browser. Database
+access is server-side only; the browser receives session cookies and
+approximate locations, never credentials or precise coordinates.
+
+The schema is explicit and versioned in
+[`lib/db/schema.ts`](lib/db/schema.ts); migrations apply
+automatically at server boot (`instrumentation.ts`) or manually via
+`npm run db:migrate`.
+
+---
+
+## How it works
+
+### Room lifecycle
+
+`POST /api/rooms` creates a room (14-day TTL) and a **host**
+participant, then issues an httpOnly, sameSite=Lax session cookie
+holding only a random token + participant id. Guests join with the
+room token from the invite URL (`/room/[token]`). The host may leave
+— the earliest remaining participant is promoted; when the last
+participant leaves, the room is deleted.
+
+### Privacy model
+
+- Precise coordinates are stored **server-side only**
+  (`private_locations` table) and never returned by any API.
+- The UI works with approximate locations (e.g. "near my office"),
+  chosen by the user at a fixed precision.
+- `GET /api/rooms/[id]` returns `hasLocation`/`hasPreferences`
+  flags and the caller's own location — never other people's.
+- Travel time/distance estimates are computed server-side and are
+  the only thing shared.
+
+### Data layer
+
+All database access lives in [`lib/db/`](lib/db):
+
+- `lib/db/schema.ts` — explicit, versioned migrations
+- `lib/db/client.ts` — Neon (postgres.js) client + migration runner
+- `lib/db/repo.ts` — every query, parameterised, room-scoped
+
+Key invariants enforced by database constraints:
+
+- **One vote per participant** (`PRIMARY KEY (room_id, participant_id)`
+  on `room_votes`) — concurrent clicks are safe, atomic upserts.
+- **Unique display names per room** (`UNIQUE (room_id, display_name)`).
+- **Idempotent shortlisting** (`PRIMARY KEY (room_id, venue_id)`).
+- **Cascading deletes** keep rooms, participants, locations,
+  preferences, votes and shortlist entries consistent.
+
+### Venue discovery
+
+1. Participants who have set **both** a location and preferences
+   contribute to the search (fairness requires both).
+2. A bounding box around the group's locations feeds an Overpass
+   query for `amenity`/`shop`/`leisure` venues. If Overpass is
+   unreachable, a **clearly-labelled deterministic demo dataset** is
+   used so the UI can be evaluated offline.
+3. Venues are scored by travel fairness (45%), preference match
+   (40%) and data completeness (15%) — see
+   [`lib/recommendations/scoring.ts`](lib/recommendations/scoring.ts).
+   No invented ratings, prices or opening hours are fabricated.
+
+### Realtime
+
+The room view polls `GET /api/rooms/[id]` every 4 seconds
+(configurable via `NEXT_PUBLIC_POLL_INTERVAL_MS`). This is the
+brief's documented fallback when live subscriptions are not
+available.
+
+---
+
+## Testing
+
+Unit tests (scoring, validation, parsing) run with no external
+services:
+
+```bash
+npm test
+```
+
+Integration tests (`tests/integration.test.ts`) exercise room
+creation, joining, voting concurrency, privacy and isolation against
+a real Postgres. Two ways to run them:
+
+```bash
+# Against a temporary embedded Postgres (no account needed):
+npm run test:integration
+
+# Against your own database — use a scratch database, not production:
+DATABASE_URL="postgresql://…" npm test
+```
+
+---
+
+## Configuration reference
+
+See `.env.example`. Open-data endpoints are keyless; no API keys are
+needed for the default stack.
+
+## Limitations & roadmap
+
+- Real travel times require a self-hosted routing engine
+  (`ROUTING_PROVIDER=valhalla|osrm`); the default is Haversine.
+- Polling, not WebSockets, refreshes the room view.
+- Sessions are per-browser (cookie-based), no accounts.
+- Rate limits are per-server-instance in-memory.
+
+## Attribution
+
+Uses © OpenStreetMap contributors (ODbL) data via Overpass and
+Photon, and MapLibre GL. Map tiles come from OpenFreeMap
+(© OpenStreetMap contributors, ODbL). Please attribute OpenStreetMap
+in your deployment's UI if you ship this publicly.

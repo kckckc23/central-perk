@@ -32,9 +32,6 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# pocketbase local data
-pb_data/
-
 # eslint
 eslint-config.mjs.tmp
 
