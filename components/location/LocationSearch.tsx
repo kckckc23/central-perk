@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2, MapPin, Search } from "lucide-react";
-import { ProviderError, searchPlaces } from "@/lib/providers/geocoding";
 import type { GeocodingResult } from "@/types";
 import { Input } from "@/components/ui/input";
 
@@ -12,9 +11,10 @@ interface LocationSearchProps {
 }
 
 /**
- * Debounced place autocomplete against the configured
- * Photon-compatible endpoint. Falls back to a clear
- * error message when the endpoint is unconfigured.
+ * Debounced place autocomplete that calls the
+ * server-side geocode API. Photon's URL is a
+ * server-only variable, so it must never be
+ * imported from a client component.
  */
 export function LocationSearch({
   onSelect,
@@ -53,17 +53,20 @@ export function LocationSearch({
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const found = await searchPlaces(trimmed);
-        setResults(found);
-        setError(null);
-        setOpen(true);
-      } catch (err) {
-        setResults([]);
-        setError(
-          err instanceof ProviderError
-            ? err.message
-            : "Place search is unavailable right now.",
+        const res = await fetch(
+          `/api/geocode?q=${encodeURIComponent(trimmed)}`,
         );
+        if (!res.ok) throw new Error("Geocoding request failed.");
+        const data = (await res.json()) as {
+          results?: GeocodingResult[];
+          error?: string;
+        };
+        setResults(Array.isArray(data.results) ? data.results : []);
+        setError(data.error ?? null);
+        setOpen(true);
+      } catch {
+        setResults([]);
+        setError("Place search is unavailable right now.");
       } finally {
         setLoading(false);
       }
