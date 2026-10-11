@@ -10,6 +10,7 @@ import { PreferencesStep } from "@/components/room/PreferencesStep";
 import { DiscoverStep } from "@/components/room/DiscoverStep";
 import { VoteStep } from "@/components/room/VoteStep";
 import { JoinPrompt } from "@/components/room/JoinPrompt";
+import { Button } from "@/components/ui/button";
 
 interface RoomClientProps {
   initialState: RoomState;
@@ -22,19 +23,21 @@ export function RoomClient({
 }: RoomClientProps) {
   const [state, setState] = useState(initialState);
   const [step, setStep] = useState<StepId>("people");
+  const [refreshError, setRefreshError] = useState<string | null>(
+    null,
+  );
 
   const refresh = useCallback(async () => {
-    try {
-      const res = await fetch(
-        `/api/rooms/${roomToken}/state`,
-        { cache: "no-store" },
+    const res = await fetch(`/api/rooms/${roomToken}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error(
+        `Couldn't refresh the room (HTTP ${res.status}).`,
       );
-      if (res.ok) {
-        setState((await res.json()) as RoomState);
-      }
-    } catch {
-      // Keep the stale state; polling retries.
     }
+    setState((await res.json()) as RoomState);
+    setRefreshError(null);
   }, [roomToken]);
 
   // Documented polling fallback for realtime updates
@@ -42,10 +45,20 @@ export function RoomClient({
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
-        void refresh();
+        refresh().catch(() => {
+          // Keep the stale state; the next poll retries.
+          setRefreshError("Couldn't refresh the room. Retrying…");
+        });
       }
     }, 4000);
     return () => clearInterval(interval);
+  }, [refresh]);
+
+  const retryRefresh = useCallback(() => {
+    setRefreshError(null);
+    refresh().catch(() => {
+      setRefreshError("Still couldn't refresh the room. Try again.");
+    });
   }, [refresh]);
 
   if (state.myParticipantId === null) {
@@ -81,6 +94,20 @@ export function RoomClient({
   return (
     <div className="min-h-screen bg-stone-50">
       <RoomHeader state={state} />
+      {refreshError && (
+        <div className="mx-auto w-full max-w-6xl px-4 pt-4">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+            <p>{refreshError}</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={retryRefresh}
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      )}
       <main className="mx-auto w-full max-w-6xl px-4 py-6">
         <StepsNav
           active={step}
