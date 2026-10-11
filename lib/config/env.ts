@@ -1,8 +1,14 @@
+import { publicConfig } from "./public";
+
 /**
  * Centralised environment configuration.
  *
  * Every external endpoint is configurable so public community endpoints can
  * later be replaced with self-hosted instances without code changes.
+ *
+ * SERVER-ONLY: this module reads secret and
+ * server-only variables. Never import it from
+ * a client component — use lib/config/public.ts.
  */
 
 export const env = {
@@ -16,13 +22,15 @@ export const env = {
   sessionSecret:
     process.env.SESSION_SECRET || "dev-insecure-session-secret-change-me",
 
-  mapStyleUrl:
-    process.env.NEXT_PUBLIC_MAP_STYLE_URL ||
-    "https://tiles.openfreemap.org/styles/liberty",
+  mapStyleUrl: publicConfig.mapStyleUrl,
 
-  // Empty means "not configured" — the app degrades to clearly labelled
-  // demo data / disabled search instead of failing.
-  photonBaseUrl: process.env.PHOTON_BASE_URL || "",
+  // Photon geocoding endpoint. The public instance
+  // serves its API under /api (the root is an HTML
+  // page); self-hosted instances serve the API at
+  // the root, which searchPlaces also handles.
+  photonBaseUrl:
+    process.env.PHOTON_BASE_URL ||
+    "https://photon.komoot.io/api",
   overpassBaseUrl: process.env.OVERPASS_BASE_URL || "",
 
   routingProvider:

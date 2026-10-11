@@ -43,10 +43,9 @@ export async function searchPlaces(query: string): Promise<GeocodingResult[]> {
     );
   }
 
-  const url = `${env.photonBaseUrl.replace(
-    /\/$/,
-    "",
-  )}?q=${encodeURIComponent(q)}&limit=6`;
+  const base = env.photonBaseUrl.replace(/\/$/, "");
+  const queryParams = `q=${encodeURIComponent(q)}&limit=6`;
+  const url = `${base}?${queryParams}`;
 
   let data: {
     features?: {
@@ -56,12 +55,30 @@ export async function searchPlaces(query: string): Promise<GeocodingResult[]> {
   };
   try {
     data = (await cachedFetch(`photon:${q}`, async () => {
-      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      let res = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) {
         if (res.status === 429) {
           throw new ProviderError("rate-limited", "Geocoding service is rate-limited. Try again shortly.");
         }
         throw new ProviderError("network", `Geocoding endpoint returned ${res.status}.`);
+      }
+      // The public Photon instance serves an HTML
+      // page at its root and the API under /api;
+      // self-hosted instances serve the API at the
+      // root. If we got HTML, retry once under /api.
+      if (
+        !/\/api\/?$/.test(base) &&
+        (res.headers.get("content-type") ?? "").includes("text/html")
+      ) {
+        res = await fetch(`${base}/api?${queryParams}`, {
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) {
+          if (res.status === 429) {
+            throw new ProviderError("rate-limited", "Geocoding service is rate-limited. Try again shortly.");
+          }
+          throw new ProviderError("network", `Geocoding endpoint returned ${res.status}.`);
+        }
       }
       return res.json();
     })) as typeof data;

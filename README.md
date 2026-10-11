@@ -76,7 +76,7 @@ npm run build
 | `DATABASE_URL` | ✅ | Auto-created by the Neon Marketplace integration (pooled URL) |
 | `SESSION_SECRET` | ✅ (prod) | Random 32-byte hex: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `NEXT_PUBLIC_SITE_URL` | recommended | Base URL used in invite links |
-| `PHOTON_BASE_URL` | optional | Default `https://photon.komoot.io` |
+| `PHOTON_BASE_URL` | optional | Default `https://photon.komoot.io/api` (the public instance serves its API under `/api`) |
 | `OVERPASS_BASE_URL` | optional | Default `https://overpass-api.de/api/interpreter`; empty = demo data |
 | `NEXT_PUBLIC_MAP_STYLE_URL` | optional | Default: dark OpenFreeMap style |
 | `ROUTING_PROVIDER` / `VALHALLA_BASE_URL` / `OSRM_BASE_URL` | optional | Self-hosted routing only |
