@@ -1,16 +1,17 @@
 import { NextRequest } from "next/server";
 import {
-  listRecords,
-  filterValue,
-} from "@/lib/db/pocketbase";
+  findRoomParticipants,
+  findRoomLocations,
+  findRoomPreferences,
+} from "@/lib/db/repo";
 import {
   getAuthenticatedParticipant,
   toPreferences,
-  type PreferencesRecord,
-  type PrivateLocationRecord,
-  type ParticipantRecord,
 } from "@/lib/room-state";
-import { discoverVenues, type DiscoveryParticipant } from "@/lib/recommendations/discover";
+import {
+  discoverVenues,
+  type DiscoveryParticipant,
+} from "@/lib/recommendations/discover";
 import { apiError, apiOk } from "@/lib/api";
 
 export async function POST(
@@ -23,26 +24,17 @@ export async function POST(
     if (!auth.ok) return apiError(auth.error, auth.status);
 
     const [participants, locations, prefs] = await Promise.all([
-      listRecords<ParticipantRecord>(
-        "participants",
-        `room=${filterValue(auth.room.id)}`,
-      ),
-      listRecords<PrivateLocationRecord>(
-        "private_locations",
-        `room=${filterValue(auth.room.id)}`,
-      ),
-      listRecords<PreferencesRecord>(
-        "preferences",
-        `room=${filterValue(auth.room.id)}`,
-      ),
+      findRoomParticipants(auth.room.id),
+      findRoomLocations(auth.room.id),
+      findRoomPreferences(auth.room.id),
     ]);
 
     // Only participants with BOTH a location and preferences
-    // contribute to discovery. Everyone needs both for fairness.
+    // contribute to discovery — fairness requires both.
     const discoveryParticipants: DiscoveryParticipant[] = [];
     for (const p of participants) {
-      const location = locations.find((l) => l.participant === p.id);
-      const pref = prefs.find((x) => x.participant === p.id);
+      const location = locations.find((l) => l.participant_id === p.id);
+      const pref = prefs.find((x) => x.participant_id === p.id);
       if (!location || !pref) continue;
       discoveryParticipants.push({
         id: p.id,

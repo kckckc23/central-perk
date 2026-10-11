@@ -1,20 +1,20 @@
 import { NextRequest } from "next/server";
 import {
-  createRecord,
-  deleteRecord,
-  listRecords,
-  updateRecord,
-  filterValue,
-} from "@/lib/db/pocketbase";
+  countRoomParticipants,
+  deleteParticipant,
+  deleteRoom,
+  findRoomParticipants,
+  setParticipantHost,
+} from "@/lib/db/repo";
 import { getAuthenticatedParticipant } from "@/lib/room-state";
 import { apiError, apiOk } from "@/lib/api";
-import type { ParticipantRecord } from "@/lib/room-state";
 
 /**
- * Leaves the room. Cascade deletes clean up the caller's
- * location, preferences and votes. If the host leaves,
- * the earliest remaining participant is promoted; if nobody
- * remains, the room is deleted.
+ * Leaves the room. Cascading deletes remove the
+ * caller's location, preferences, votes and any
+ * shortlist entries they added. If the host
+ * leaves, the earliest remaining participant is
+ * promoted; if nobody remains, the room is deleted.
  */
 export async function POST(
   _request: NextRequest,
@@ -25,25 +25,21 @@ export async function POST(
     const auth = await getAuthenticatedParticipant(roomId);
     if (!auth.ok) return apiError(auth.error, auth.status);
 
-    const remaining = (
-      await listRecords<ParticipantRecord>(
-        "participants",
-        `room=${filterValue(auth.room.id)} && id!=${filterValue(auth.participant.id)}`,
-      )
-    ).sort((a, b) => a.created.localeCompare(b.created));
+    const remaining = await findRoomParticipants(auth.room.id);
+    const others = remaining
+      .filter((p) => p.id !== auth.participant.id)
+      .sort((a, b) => a.joined_at.getTime() - b.joined_at.getTime());
 
-    await deleteRecord("participants", auth.participant.id);
+    await deleteParticipant(auth.participant.id);
 
-    if (remaining.length === 0) {
-      await deleteRecord("rooms", auth.room.id);
+    if (others.length === 0) {
+      await deleteRoom(auth.room.id);
       return apiOk({ ok: true, roomDeleted: true });
     }
 
     if (auth.participant.is_host) {
-      await updateRecord("participants", remaining[0].id, {
-        is_host: true,
-      });
-      return apiOk({ ok: true, newHost: remaining[0].display_name });
+      await setParticipantHost(others[0].id, true);
+      return apiOk({ ok: true, newHost: others[0].display_name });
     }
     return apiOk({ ok: true });
   } catch (err) {

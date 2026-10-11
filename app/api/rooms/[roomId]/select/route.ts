@@ -1,10 +1,5 @@
 import { NextRequest } from "next/server";
-import {
-  listRecords,
-  updateRecord,
-  filterValue,
-} from "@/lib/db/pocketbase";
-import { getAuthenticatedParticipant } from "@/lib/room-state";
+import { getAuthenticatedParticipant, getShortlistEntry, confirmRoomVenue } from "@/lib/room-state";
 import { parseBody, selectVenueSchema } from "@/lib/validation";
 import { apiError, apiOk } from "@/lib/api";
 
@@ -34,21 +29,16 @@ export async function POST(
     );
     if (!parsed.ok) return apiError(parsed.error, 400);
 
-    const shortlisted = await listRecords(
-      "room_shortlist",
-      `room=${filterValue(auth.room.id)} && venue_id=${filterValue(parsed.data.venueId)}`,
+    const entry = await getShortlistEntry(
+      auth.room.id,
+      parsed.data.venueId,
     );
-    if (shortlisted.length === 0) {
-      return apiError(
-        "Only shortlisted venues can be confirmed.",
-        404,
-      );
+    if (!entry) {
+      return apiError("Only shortlisted venues can be confirmed.", 404);
     }
 
-    await updateRecord("rooms", auth.room.id, {
-      selected_venue: shortlisted[0].venue,
-    });
-    return apiOk({ ok: true, venue: shortlisted[0].venue });
+    await confirmRoomVenue(auth.room.id, entry.venue);
+    return apiOk({ ok: true, venue: entry.venue });
   } catch (err) {
     return apiError(
       err instanceof Error ? err.message : "Failed to confirm venue",

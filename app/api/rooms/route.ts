@@ -1,10 +1,11 @@
+import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import {
-  createRecord,
-  PocketBaseError,
-  updateRecord,
-} from "@/lib/db/pocketbase";
-import { ensureCollections } from "@/lib/db/setup";
+  createParticipant,
+  createRoom,
+  setRoomCreator,
+} from "@/lib/db/repo";
+import { isUniqueViolation } from "@/lib/db/client";
 import { ROOM_TTL_MS } from "@/lib/config/env";
 import {
   hashSessionToken,
@@ -33,39 +34,9 @@ function clientIp(request: NextRequest): string {
   );
 }
 
-async function createRoomWithUniqueToken(
-  name: string,
-  expires: string,
-): Promise<ReturnType<typeof createRecord>> {
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const token = newRoomToken();
-    const slug = `${slugify(name)}-${newSlugSuffix()}`;
-    try {
-      return await createRecord("rooms", {
-        name,
-        token,
-        slug,
-        creator_participant_id: null,
-        expires,
-        status: "open",
-        selected_venue: null,
-      });
-    } catch (err) {
-      lastError = err;
-      // Unique-constraint collision → retry with a fresh token/slug.
-      if (err instanceof PocketBaseError && err.status === 400) continue;
-      throw err;
-    }
-  }
-  throw lastError;
-}
-
 export async function POST(request: NextRequest) {
   try {
-    if (
-      !rateLimit(`create-room:${clientIp(request)}`, 10, 60_000)
-    ) {
+    if (!rateLimit(`create-room:${clientIp(request)}`, 10, 60_000)) {
       return apiError(
         "Too many requests. Please wait a moment and try again.",
         429,
@@ -78,26 +49,40 @@ export async function POST(request: NextRequest) {
     );
     if (!parsed.ok) return apiError(parsed.error, 400);
 
-    await ensureCollections();
+    const expiresAt = new Date(Date.now() + ROOM_TTL_MS);
 
-    const room = await createRoomWithUniqueToken(
-      parsed.data.name,
-      new Date(Date.now() + ROOM_TTL_MS).toISOString(),
-    );
+    // Unique token + slug, retried on the rare
+    // collision (the database enforces uniqueness).
+    let room;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const token = newRoomToken();
+      const slug = `${slugify(parsed.data.name)}-${newSlugSuffix()}`;
+      try {
+        room = await createRoom({
+          id: randomUUID(),
+          token,
+          slug,
+          name: parsed.data.name,
+          expiresAt,
+        });
+        break;
+      } catch (err) {
+        if (isUniqueViolation(err) && attempt < 4) continue;
+        throw err;
+      }
+    }
+    if (!room!) return apiError("Could not create room.", 500);
 
     const sessionToken = newSessionToken();
-    const participant = await createRecord("participants", {
-      room: room.id,
-      display_name: parsed.data.displayName,
-      token_hash: hashSessionToken(sessionToken),
-      is_host: true,
-      ready: false,
+    const participant = await createParticipant({
+      id: randomUUID(),
+      roomId: room.id,
+      displayName: parsed.data.displayName,
+      tokenHash: hashSessionToken(sessionToken),
+      isHost: true,
     });
 
-    await updateRecord("rooms", room.id, {
-      creator_participant_id: participant.id,
-    });
-
+    await setRoomCreator(room.id, participant.id);
     await setSessionCookie(participant.id, sessionToken);
 
     return apiOk(
@@ -107,7 +92,7 @@ export async function POST(request: NextRequest) {
           token: room.token,
           slug: room.slug,
           name: room.name,
-          expires: room.expires,
+          expires: room.expires_at.toISOString(),
         },
         participant: {
           id: participant.id,

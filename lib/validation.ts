@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Server-side input validation. Never trust client payloads —
- * PocketBase rules are empty and every route validates here.
+ * the database enforces constraints and every route validates here.
  */
 
 export const createRoomSchema = z.object({
@@ -39,16 +39,17 @@ export const voteSchema = z.object({
   value: z.enum(["yes", "no"]),
 });
 
-export const venueSnapshotSchema = z
-  .object({
-    id: z.string().min(1).max(128),
-    name: z.string().min(1).max(200),
-    category: z.string().max(80),
-    categories: z.array(z.string().max(80)).max(20),
-    lat: z.number().min(-90).max(90),
-    lng: z.number().min(-180).max(180),
-  })
-  .passthrough();
+export const venueSnapshotSchema = z.object({
+  id: z.string().min(1).max(128),
+  name: z.string().min(1).max(200),
+  category: z.string().max(80),
+  categories: z.array(z.string().max(80)).max(20),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  price: z.number().min(0).max(100000).nullable(),
+  outdoorSeating: z.boolean().nullable(),
+  tags: z.record(z.string()),
+});
 
 export const shortlistSchema = z.object({
   venueId: z.string().min(1).max(128),

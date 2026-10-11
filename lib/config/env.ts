@@ -6,12 +6,13 @@
  */
 
 export const env = {
-  pocketbaseUrl: process.env.POCKETBASE_URL || "http://127.0.0.1:8090",
-  pocketbaseEmail: process.env.POCKETBASE_SUPERUSER_EMAIL || "",
-  pocketbasePassword: process.env.POCKETBASE_SUPERUSER_PASSWORD || "",
+  // Neon Serverless Postgres connection string
+  // (created via the Vercel Marketplace Neon integration).
+  databaseUrl: process.env.DATABASE_URL || "",
 
-  // Sign guest session cookies. A dev fallback exists so `npm run dev` works
-  // out of the box; production deployments must set a real random value.
+  // Sign guest session cookies. A dev fallback exists so
+  // `npm run dev` works out of the box; production
+  // deployments must set a real random value.
   sessionSecret:
     process.env.SESSION_SECRET || "dev-insecure-session-secret-change-me",
 

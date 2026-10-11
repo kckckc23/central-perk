@@ -1,13 +1,11 @@
 import { NextRequest } from "next/server";
 import {
-  createRecord,
-  deleteRecord,
-  listRecords,
-  updateRecord,
-  filterValue,
-} from "@/lib/db/pocketbase";
+  deleteLocation,
+  upsertLocation,
+} from "@/lib/db/repo";
 import { getAuthenticatedParticipant } from "@/lib/room-state";
 import { locationSchema, parseBody } from "@/lib/validation";
+import { setParticipantReady } from "@/lib/db/repo";
 import { apiError, apiOk } from "@/lib/api";
 
 export async function PUT(
@@ -25,25 +23,15 @@ export async function PUT(
     );
     if (!parsed.ok) return apiError(parsed.error, 400);
 
-    const now = new Date().toISOString();
-    const existing = await listRecords(
-      "private_locations",
-      `participant=${filterValue(auth.participant.id)}`,
-    );
-    const payload = {
-      participant: auth.participant.id,
-      room: auth.room.id,
+    await upsertLocation({
+      participantId: auth.participant.id,
+      roomId: auth.room.id,
       label: parsed.data.label,
       lat: parsed.data.lat,
       lng: parsed.data.lng,
       precision: parsed.data.precision,
-      updated: now,
-    };
-    if (existing[0]) {
-      await updateRecord("private_locations", existing[0].id, payload);
-    } else {
-      await createRecord("private_locations", payload);
-    }
+      updatedAt: new Date(),
+    });
     return apiOk({ ok: true });
   } catch (err) {
     return apiError(
@@ -62,16 +50,8 @@ export async function DELETE(
     const auth = await getAuthenticatedParticipant(roomId);
     if (!auth.ok) return apiError(auth.error, auth.status);
 
-    const existing = await listRecords(
-      "private_locations",
-      `participant=${filterValue(auth.participant.id)}`,
-    );
-    for (const record of existing) {
-      await deleteRecord("private_locations", record.id);
-    }
-    await updateRecord("participants", auth.participant.id, {
-      ready: false,
-    });
+    await deleteLocation(auth.participant.id);
+    await setParticipantReady(auth.participant.id, false);
     return apiOk({ ok: true });
   } catch (err) {
     return apiError(

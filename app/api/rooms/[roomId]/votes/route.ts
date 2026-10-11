@@ -1,18 +1,13 @@
 import { NextRequest } from "next/server";
-import {
-  createRecord,
-  listRecords,
-  updateRecord,
-  filterValue,
-} from "@/lib/db/pocketbase";
+import { upsertVote } from "@/lib/db/repo";
 import { getAuthenticatedParticipant } from "@/lib/room-state";
 import { parseBody, voteSchema } from "@/lib/validation";
 import { apiError, apiOk } from "@/lib/api";
 
 /**
- * Upserts the caller's vote for a venue.
- * Unique on (room, participant), so retries and
- * double-clicks cannot create duplicate votes.
+ * Atomic upsert on the (room_id, participant_id)
+ * primary key — concurrent or retried clicks
+ * can never create duplicate votes.
  */
 export async function PUT(
   request: NextRequest,
@@ -29,23 +24,13 @@ export async function PUT(
     );
     if (!parsed.ok) return apiError(parsed.error, 400);
 
-    const now = new Date().toISOString();
-    const existing = await listRecords(
-      "room_votes",
-      `room=${filterValue(auth.room.id)} && participant=${filterValue(auth.participant.id)}`,
-    );
-    const payload = {
-      room: auth.room.id,
-      participant: auth.participant.id,
-      venue_id: parsed.data.venueId,
+    await upsertVote({
+      roomId: auth.room.id,
+      participantId: auth.participant.id,
+      venueId: parsed.data.venueId,
       value: parsed.data.value,
-      updated: now,
-    };
-    if (existing[0]) {
-      await updateRecord("room_votes", existing[0].id, payload);
-    } else {
-      await createRecord("room_votes", payload);
-    }
+      updatedAt: new Date(),
+    });
     return apiOk({ ok: true });
   } catch (err) {
     return apiError(

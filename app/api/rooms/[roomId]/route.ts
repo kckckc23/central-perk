@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { runMigrations } from "@/lib/db/client";
 import { getRoomState } from "@/lib/room-state";
 import { apiError, apiOk } from "@/lib/api";
 

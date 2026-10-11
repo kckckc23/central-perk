@@ -1,10 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import {
-  createRecord,
-  listRecords,
-  filterValue,
-} from "@/lib/db/pocketbase";
-import { ensureCollections } from "@/lib/db/setup";
+  createParticipant,
+  findRoomByToken,
+} from "@/lib/db/repo";
+import { roomIsExpired } from "@/lib/room-state";
 import {
   hashSessionToken,
   newSessionToken,
@@ -12,10 +12,6 @@ import {
 } from "@/lib/auth/session";
 import { joinRoomSchema, parseBody } from "@/lib/validation";
 import { rateLimit } from "@/lib/rate-limit";
-import {
-  findRoomByToken,
-  roomIsExpired,
-} from "@/lib/room-state";
 import { apiError, apiOk } from "@/lib/api";
 
 export async function POST(
@@ -37,7 +33,6 @@ export async function POST(
     );
     if (!parsed.ok) return apiError(parsed.error, 400);
 
-    await ensureCollections();
     const room = await findRoomByToken(roomId);
     if (!room) return apiError("Room not found. Check the invite link.", 404);
     if (roomIsExpired(room)) {
@@ -50,24 +45,13 @@ export async function POST(
       return apiError("This room is closed.", 410);
     }
 
-    const existing = await listRecords(
-      "participants",
-      `room=${filterValue(room.id)} && display_name=${filterValue(parsed.data.displayName)}`,
-    );
-    if (existing.length > 0) {
-      return apiError(
-        "That display name is already in this room. Pick another so people can tell you apart.",
-        409,
-      );
-    }
-
     const sessionToken = newSessionToken();
-    const participant = await createRecord("participants", {
-      room: room.id,
-      display_name: parsed.data.displayName,
-      token_hash: hashSessionToken(sessionToken),
-      is_host: false,
-      ready: false,
+    const participant = await createParticipant({
+      id: randomUUID(),
+      roomId: room.id,
+      displayName: parsed.data.displayName,
+      tokenHash: hashSessionToken(sessionToken),
+      isHost: false,
     });
 
     await setSessionCookie(participant.id, sessionToken);
@@ -80,9 +64,11 @@ export async function POST(
       },
     });
   } catch (err) {
+    // createParticipant throws a friendly
+    // DatabaseError on a duplicate display name.
     return apiError(
       err instanceof Error ? err.message : "Failed to join room",
-      500,
+      err instanceof Error && err.name === "DatabaseError" ? 409 : 500,
     );
   }
 }
