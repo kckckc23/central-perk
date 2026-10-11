@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { AlertTriangle } from "lucide-react";
-import { env } from "@/lib/config/env";
+import { publicConfig } from "@/lib/config/public";
 import type { LatLng, Venue } from "@/types";
 
 interface VenueMapProps {
@@ -40,7 +40,7 @@ export function VenueMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: env.mapStyleUrl,
+      style: publicConfig.mapStyleUrl,
       center: [center.lng, center.lat],
       zoom: 13,
       attributionControl: {},
