@@ -27,6 +27,7 @@ export function LocationSearch({
   const [open, setOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const skipSearchRef = useRef(false);
 
   useEffect(() => {
     function handleOutside(event: MouseEvent) {
@@ -42,6 +43,11 @@ export function LocationSearch({
   }, []);
 
   useEffect(() => {
+    if (skipSearchRef.current) {
+      skipSearchRef.current = false;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      return;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const trimmed = query.trim();
     if (trimmed.length < 2) {
@@ -110,6 +116,7 @@ export function LocationSearch({
                 type="button"
                 className="flex w-full items-start gap-2 px-3 py-2.5 text-left text-sm hover:bg-stone-50 focus:bg-stone-50 focus:outline-2 focus:outline-brand-600"
                 onClick={() => {
+                  skipSearchRef.current = true;
                   onSelect(result);
                   setOpen(false);
                   setQuery(result.label);

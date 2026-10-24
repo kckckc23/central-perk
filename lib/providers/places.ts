@@ -68,11 +68,26 @@ export async function searchVenues(
       async () => {
         const res = await fetch(env.overpassBaseUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "SpotSync/0.1 (open-source meetup spot finder)",
+          },
           body: new URLSearchParams({ data: query }).toString(),
           signal: AbortSignal.timeout(30000),
         });
         if (!res.ok) {
+          let body = "";
+          try {
+            body = await res.text();
+          } catch {
+            // ignore body read errors
+          }
+          console.error(
+            "[spotsync] Overpass discovery failed",
+            res.status,
+            res.statusText,
+            body.slice(0, 500),
+          );
           if (res.status === 429) {
             throw new ProviderError("rate-limited", "The map-data endpoint is rate-limited. Try again shortly.");
           }
@@ -84,6 +99,14 @@ export async function searchVenues(
     elements = data.elements ?? [];
   } catch (err) {
     if (err instanceof ProviderError) throw err;
+    const isTimeout =
+      err instanceof Error &&
+      (err.name === "TimeoutError" || err.name === "AbortError");
+    if (isTimeout) {
+      console.error("[spotsync] Overpass discovery timed out");
+    } else {
+      console.error("[spotsync] Overpass discovery unreachable", err);
+    }
     throw new ProviderError("network", "Map-data endpoint is unreachable right now.");
   }
 
